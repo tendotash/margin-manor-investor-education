@@ -159,7 +159,7 @@ def live_ticker_tape(height=82):
             {"description": "Gold", "proName": "OANDA:XAUUSD"},
             {"description": "DXY", "proName": "CAPITALCOM:DXY"},
             {"description": "S&P 500", "proName": "FOREXCOM:SPXUSD"},
-            {"description": "US 10Y", "proName": "CBOE:TNX.P"},
+            {"description": "US 10Y", "proName": "TVC:TNX"},
             {"description": "Bitcoin", "proName": "BITSTAMP:BTCUSD"},
             {"description": "EUR/USD", "proName": "FX:EURUSD"},
             {"description": "USD/JPY", "proName": "FX:USDJPY"},
