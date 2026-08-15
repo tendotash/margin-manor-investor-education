@@ -11,6 +11,12 @@ from premium_engine import (
     supabase_logout,
     send_password_reset,
     fred_series,
+    admin_state,
+    submit_public_question,
+    lookup_question_reply,
+    list_admin_questions,
+    save_question_answer,
+    set_question_status,
 )
 
 st.set_page_config(
@@ -1879,6 +1885,7 @@ with st.sidebar:
 
     # Persistent Supabase member-login area.
     member_access = access_state()
+    admin_access = admin_state()
 
     st.markdown('<div class="nav-section member-access-heading">MEMBER ACCESS</div>', unsafe_allow_html=True)
 
@@ -1983,6 +1990,7 @@ with st.sidebar:
         "nav_briefs",
         "nav_tools",
         "nav_members",
+        "nav_admin",
         "nav_contact",
     ]
 
@@ -2053,6 +2061,18 @@ with st.sidebar:
         on_change=_set_nav_page,
         args=("nav_members",),
     )
+
+    if admin_access["allowed"]:
+        st.markdown('<div class="nav-section">ADMIN</div>', unsafe_allow_html=True)
+        st.radio(
+            "Admin",
+            ["Questions Inbox"],
+            index=None,
+            key="nav_admin",
+            label_visibility="collapsed",
+            on_change=_set_nav_page,
+            args=("nav_admin",),
+        )
 
     st.markdown('<div class="nav-section">CONTACT</div>', unsafe_allow_html=True)
     st.radio(
@@ -2438,27 +2458,271 @@ elif page == "Gold / FX Dashboard":
     st.markdown('<div class="section-title">KEY MACRO EVENTS</div>', unsafe_allow_html=True)
     live_economic_calendar(height=520, compact=True)
 
+elif page == "Questions Inbox":
+    top_ticker()
+
+    if not admin_access.get("allowed"):
+        st.error("Admin access required.")
+    else:
+        render_html(f"""
+        <div class="content-card">
+            <h2>Questions Inbox</h2>
+            <p>
+                Private Margin Manor admin area for reading and answering submitted questions.
+                Signed in as <strong>{admin_access.get("name", "Admin")}</strong>.
+            </p>
+        </div>
+        """)
+
+        ok, message, all_questions = list_admin_questions(status="All", limit=200)
+
+        if not ok:
+            st.error(message)
+        else:
+            counts = {
+                "new": sum(1 for q in all_questions if q.get("status") == "new"),
+                "read": sum(1 for q in all_questions if q.get("status") == "read"),
+                "answered": sum(1 for q in all_questions if q.get("status") == "answered"),
+                "archived": sum(1 for q in all_questions if q.get("status") == "archived"),
+            }
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("New", counts["new"])
+            m2.metric("Read", counts["read"])
+            m3.metric("Answered", counts["answered"])
+            m4.metric("Archived", counts["archived"])
+
+            filter_col, search_col = st.columns([1, 2])
+            with filter_col:
+                status_filter = st.selectbox(
+                    "Status",
+                    ["All", "New", "Read", "Answered", "Archived"],
+                    key="admin_question_status_filter",
+                )
+
+            with search_col:
+                inbox_search = st.text_input(
+                    "Search",
+                    key="admin_question_search",
+                    placeholder="Search name, email, reference or question...",
+                )
+
+            questions = all_questions
+
+            if status_filter != "All":
+                questions = [
+                    q for q in questions
+                    if str(q.get("status") or "").lower() == status_filter.lower()
+                ]
+
+            if inbox_search.strip():
+                term = inbox_search.strip().lower()
+                questions = [
+                    q for q in questions
+                    if term in " ".join([
+                        str(q.get("name") or ""),
+                        str(q.get("email") or ""),
+                        str(q.get("public_token") or ""),
+                        str(q.get("question_text") or ""),
+                        str(q.get("experience") or ""),
+                    ]).lower()
+                ]
+
+            st.caption(f"Showing {len(questions)} question(s).")
+
+            if not questions:
+                st.info("No questions match the current filter.")
+            else:
+                for q in questions:
+                    qid = str(q.get("id"))
+                    status = str(q.get("status") or "new").upper()
+                    token = str(q.get("public_token") or "")
+                    name = str(q.get("name") or "Unknown")
+                    email = str(q.get("email") or "")
+                    experience = str(q.get("experience") or "")
+                    created_at = str(q.get("created_at") or "")
+                    question_text = str(q.get("question_text") or "")
+                    existing_answer = str(q.get("answer") or "")
+
+                    label = f"{status} · {name} · {token}"
+
+                    with st.expander(label, expanded=(status == "NEW")):
+                        render_html(f"""
+                        <div class="admin-question-meta">
+                            <div><span>EMAIL</span><strong>{email}</strong></div>
+                            <div><span>EXPERIENCE</span><strong>{experience}</strong></div>
+                            <div><span>REFERENCE</span><strong>{token}</strong></div>
+                            <div><span>SUBMITTED</span><strong>{created_at}</strong></div>
+                        </div>
+                        """)
+
+                        st.markdown("#### Question")
+                        st.write(question_text)
+
+                        status_cols = st.columns(3)
+                        with status_cols[0]:
+                            if st.button(
+                                "Mark Read",
+                                key=f"mark_read_{qid}",
+                                use_container_width=True,
+                            ):
+                                status_ok, status_msg = set_question_status(qid, "read")
+                                (st.success if status_ok else st.error)(status_msg)
+                                if status_ok:
+                                    st.rerun()
+
+                        with status_cols[1]:
+                            if st.button(
+                                "Archive",
+                                key=f"archive_{qid}",
+                                use_container_width=True,
+                            ):
+                                status_ok, status_msg = set_question_status(qid, "archived")
+                                (st.success if status_ok else st.error)(status_msg)
+                                if status_ok:
+                                    st.rerun()
+
+                        with status_cols[2]:
+                            if email:
+                                st.link_button(
+                                    "Open Email",
+                                    f"mailto:{email}?subject=Margin%20Manor%20Question%20{token}",
+                                    use_container_width=True,
+                                )
+
+                        st.markdown("#### Answer")
+                        answer_text = st.text_area(
+                            "Reply",
+                            value=existing_answer,
+                            height=180,
+                            key=f"answer_{qid}",
+                            label_visibility="collapsed",
+                            placeholder="Write Margin Manor's answer here...",
+                        )
+
+                        if st.button(
+                            "Save & Publish Answer",
+                            key=f"save_answer_{qid}",
+                            type="primary",
+                            use_container_width=True,
+                        ):
+                            answer_ok, answer_msg = save_question_answer(qid, answer_text)
+                            (st.success if answer_ok else st.error)(answer_msg)
+                            if answer_ok:
+                                st.rerun()
+
+                        if existing_answer:
+                            st.caption(
+                                "This answer is already published and can be viewed by the user "
+                                "with their reference number and email."
+                            )
+
 elif page == "Ask a Question":
     top_ticker()
     render_html("""
     <div class="content-card">
         <h2>Ask a Question</h2>
-        <p>Submit your investing question below.</p>
+        <p>
+            Send your investing or market question directly to Margin Manor.
+            After submitting, save your reference number so you can return here
+            and check the reply.
+        </p>
     </div>
     """)
 
-    with st.form("contact_form"):
-        name = st.text_input("Name")
-        email = st.text_input("Email")
-        experience = st.selectbox("Investing experience", ["Beginner", "Some experience", "Intermediate", "Advanced"])
-        question = st.text_area("Question")
-        submitted = st.form_submit_button("Submit Question")
+    default_name = ""
+    default_email = ""
+    if member_access.get("allowed"):
+        default_name = member_access.get("name", "") or ""
+        default_email = member_access.get("email", "") or ""
+
+    st.markdown('<div class="section-title">SUBMIT A QUESTION</div>', unsafe_allow_html=True)
+
+    with st.form("contact_form", clear_on_submit=True):
+        name = st.text_input("Name", value=default_name)
+        email = st.text_input("Email", value=default_email)
+        experience = st.selectbox(
+            "Investing experience",
+            ["Beginner", "Some experience", "Intermediate", "Advanced"],
+        )
+        question = st.text_area(
+            "Question",
+            height=150,
+            placeholder="What would you like to ask Margin Manor?",
+        )
+        submitted = st.form_submit_button(
+            "Submit Question",
+            type="primary",
+            use_container_width=True,
+        )
 
     if submitted:
-        if not name or not email or not question:
-            st.error("Please fill in your name, email and question.")
+        ok, message, ticket = submit_public_question(
+            name=name,
+            email=email,
+            experience=experience,
+            question=question,
+        )
+
+        if ok:
+            st.success("Your question has been sent to Margin Manor.")
+            render_html(f"""
+            <div class="question-ticket-card">
+                <span>YOUR QUESTION REFERENCE</span>
+                <strong>{ticket}</strong>
+                <p>
+                    Save this reference. Use it together with your email below
+                    to check whether Margin Manor has answered your question.
+                </p>
+            </div>
+            """)
         else:
-            st.info(
-                "Your form is complete, but this site does not yet have a message destination configured. "
-                "Connect an email, Google Sheet, Supabase table or webhook before publishing this form as a working submission."
-            )
+            st.error(message)
+
+    st.markdown('<div class="section-title">CHECK A PREVIOUS QUESTION</div>', unsafe_allow_html=True)
+    st.caption(
+        "Enter the reference number you received when submitting, plus the same email address."
+    )
+
+    with st.form("question_lookup_form"):
+        lookup_ref = st.text_input(
+            "Question Reference",
+            placeholder="e.g. A1B2C3D4E5F6",
+        )
+        lookup_email = st.text_input(
+            "Email used for the question",
+            value=default_email,
+        )
+        check_submitted = st.form_submit_button(
+            "Check for Reply",
+            use_container_width=True,
+        )
+
+    if check_submitted:
+        ok, message, reply = lookup_question_reply(lookup_ref, lookup_email)
+
+        if not ok:
+            st.warning(message)
+        else:
+            status = str(reply.get("status") or "new").lower()
+            original_question = reply.get("question_text") or ""
+            answer = reply.get("answer") or ""
+            answered_at = reply.get("answered_at")
+
+            render_html(f"""
+            <div class="question-status-card">
+                <span>QUESTION STATUS</span>
+                <strong>{status.upper()}</strong>
+                <p>{original_question}</p>
+            </div>
+            """)
+
+            if status == "answered" and answer:
+                st.markdown("#### Margin Manor Reply")
+                st.write(answer)
+                if answered_at:
+                    st.caption(f"Answered: {answered_at}")
+            else:
+                st.info(
+                    "Margin Manor has received your question, but a reply has not been published yet."
+                )
