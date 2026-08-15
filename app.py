@@ -1852,7 +1852,6 @@ def insight_engine_page():
 PAGES = [
     "Home",
     "About Margin Manor",
-    "Who It Helps",
     "Free Market Tools / Insights",
     "Member Live Insight Engine",
     "Beginner Investing",
@@ -1989,7 +1988,7 @@ with st.sidebar:
     st.markdown('<div class="nav-section">MAIN</div>', unsafe_allow_html=True)
     st.radio(
         "Main",
-        ["Home", "About Margin Manor", "Who It Helps", "Free Market Tools / Insights"],
+        ["Home", "About Margin Manor", "Free Market Tools / Insights"],
         key="nav_main",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2179,30 +2178,52 @@ if page == "Home":
 elif page == "About Margin Manor":
     content_page(
         "About Margin Manor",
-        "Margin Manor is an investor education and market insights platform.",
+        "Investor education, market intelligence and practical tools designed to make financial markets easier to understand.",
         """
-        <p>It helps beginners understand how markets move before risking money.</p>
-        <ul>
-            <li>Investor education</li>
-            <li>Market briefs</li>
-            <li>Macro and asset dashboards</li>
-            <li>Risk management frameworks</li>
-            <li>Strategy and research library</li>
-        </ul>
-        """
-    )
+        <div class="about-combined">
+            <h3>What Margin Manor Is</h3>
+            <p>
+                Margin Manor is an investor education and market insights platform built to help people
+                understand how financial markets work before putting capital at risk. It brings education,
+                market context and practical analytical tools into one accessible environment.
+            </p>
 
-elif page == "Who It Helps":
-    content_page(
-        "Who Margin Manor Helps",
-        "Built for beginners, young investors, self-learners and market watchers.",
-        """
-        <ul>
-            <li>People who want to start investing safely.</li>
-            <li>People who want to understand stocks, ETFs, REITs and bonds.</li>
-            <li>People who want simple market updates.</li>
-            <li>People who want to learn risk before chasing returns.</li>
-        </ul>
+            <p>
+                The platform combines structured learning with live market information so users can move
+                from understanding concepts to seeing how those concepts apply in real market conditions.
+            </p>
+
+            <ul>
+                <li>Investor education across stocks, ETFs, REITs, bonds and market fundamentals</li>
+                <li>Live market briefs, economic events and cross-asset context</li>
+                <li>Macro, Gold, Forex and market-analysis dashboards</li>
+                <li>Risk-management frameworks and decision-support tools</li>
+                <li>Strategy, research and practical market-learning resources</li>
+            </ul>
+
+            <hr style="border:0;border-top:1px solid rgba(217,164,65,0.24);margin:28px 0;">
+
+            <h3>Who Margin Manor Helps</h3>
+            <p>
+                Margin Manor is designed for people who want a clearer and more structured way to learn,
+                follow and analyse financial markets — without needing to begin with an advanced finance
+                or technical background.
+            </p>
+
+            <ul>
+                <li><strong>Beginner investors</strong> who want to understand the fundamentals before investing.</li>
+                <li><strong>Self-directed learners</strong> who want structured explanations instead of fragmented information.</li>
+                <li><strong>Young and developing investors</strong> building confidence in stocks, ETFs, REITs, bonds and risk.</li>
+                <li><strong>Market watchers and traders</strong> who want live context, macro drivers and cross-asset insights.</li>
+                <li><strong>Users who value risk first</strong> and want to understand why markets move before chasing returns.</li>
+            </ul>
+
+            <p>
+                Whether the goal is to begin investing, improve market understanding or develop a more
+                disciplined analytical process, Margin Manor is designed to turn complex market information
+                into practical, usable insight.
+            </p>
+        </div>
         """
     )
 
