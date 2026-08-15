@@ -1393,3 +1393,60 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) .mm-
 .mm-live-events-anchor {
     display: none !important;
 }
+
+
+/* =========================================================
+   V7.7.3 — SINGLE-BORDER LIVE MARKET BRIEF
+   The outer Streamlit container owns the border. The heading
+   is now a flush header row, so TradingView content cannot
+   appear to sit outside/overlap a second inner rectangle.
+   ========================================================= */
+
+.live-panel-heading,
+.live-events-heading {
+    border: 0 !important;
+    border-bottom: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    background: rgba(7,19,33,0.72) !important;
+    padding: 16px 18px !important;
+}
+
+/* Ensure the two Live Market Brief shells clip everything to one border. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) {
+    overflow: hidden !important;
+    border-radius: 7px !important;
+}
+
+/* Remove any internal vertical spacing between header and widget. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor)
+div[data-testid="stVerticalBlock"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor)
+div[data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+/* TradingView content begins directly below the header divider. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor)
+iframe,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor)
+iframe {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border: 0 !important;
+}
+
+/* Prevent an extra border/padding shell around the widget component itself. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor)
+[data-testid="stCustomComponentV1"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor)
+[data-testid="stCustomComponentV1"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+}
