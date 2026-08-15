@@ -38,6 +38,59 @@ def render_html(markup):
     st.html(dedent(markup).strip())
 
 
+def tradingview_isolated_html(widget_html, height, scrolling=False):
+    """
+    Render TradingView code inside an isolated Streamlit component iframe.
+
+    TradingView's legacy Top Stories widget is itself iframe-based and its
+    embed script is more reliable when executed inside a normal HTML document.
+    This also isolates third-party JavaScript from the main Streamlit DOM.
+    """
+    from streamlit.components.v1 import html as components_html
+
+    document = f"""
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          html, body {{
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+          }}
+          * {{ box-sizing: border-box; }}
+          .tv-frame {{
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+          }}
+          .tradingview-widget-container,
+          .tradingview-widget-container__widget {{
+            width: 100% !important;
+            height: 100% !important;
+          }}
+        </style>
+      </head>
+      <body>
+        <div class="tv-frame">
+          {widget_html}
+        </div>
+      </body>
+    </html>
+    """
+    components_html(
+        dedent(document).strip(),
+        height=height,
+        scrolling=scrolling,
+    )
+
+
 
 def tradingview_widget(script_src, config, height=360, container_class="mm-tv-widget"):
     """Render an official TradingView embed inside Streamlit."""
@@ -92,51 +145,58 @@ def live_economic_calendar(height=360, compact=False):
     )
 
 
-def live_ticker_tape(height=78):
-    """Live multi-asset prices and daily changes."""
-    tradingview_widget(
-        "https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js",
-        {
-            "symbols": [
-                {"proName": "OANDA:XAUUSD", "title": "Gold"},
-                {"proName": "TVC:DXY", "title": "DXY"},
-                {"proName": "FOREXCOM:SPXUSD", "title": "S&P 500"},
-                {"proName": "TVC:US10Y", "title": "US 10Y"},
-                {"proName": "BITSTAMP:BTCUSD", "title": "Bitcoin"},
-                {"proName": "FX:EURUSD", "title": "EUR/USD"},
-                {"proName": "FX:USDJPY", "title": "USD/JPY"},
-            ],
-            "showSymbolLogo": False,
-            "isTransparent": True,
-            "displayMode": "adaptive",
-            "colorTheme": "dark",
-            "locale": "en",
-        },
-        height=height,
-        container_class="mm-live-ticker",
-    )
+def live_ticker_tape(height=82):
+    """Live multi-asset prices using TradingView's current Ticker Tape web component."""
+    symbols = ",".join([
+        "OANDA:XAUUSD",
+        "TVC:DXY",
+        "FOREXCOM:SPXUSD",
+        "TVC:US10Y",
+        "BITSTAMP:BTCUSD",
+        "FX:EURUSD",
+        "FX:USDJPY",
+    ])
+
+    widget_html = f"""
+    <script type="module"
+            src="https://widgets.tradingview-widget.com/w/en/tv-ticker-tape.js"></script>
+    <tv-ticker-tape
+        symbols="{symbols}"
+        theme="dark"
+        transparent-background
+        style="display:block;width:100%;height:100%;">
+    </tv-ticker-tape>
+    """
+    tradingview_isolated_html(widget_html, height=height, scrolling=False)
 
 
 def live_top_stories(height=430, symbol=None):
-    """Live TradingView market-news brief."""
+    """Live TradingView Top Stories in an isolated iframe for Streamlit Cloud reliability."""
     config = {
-        "feedMode": "all_symbols" if not symbol else "symbol",
+        "feedMode": "symbol" if symbol else "all_symbols",
         "isTransparent": True,
         "displayMode": "regular",
         "width": "100%",
-        "height": max(height - 2, 280),
+        "height": "100%",
         "colorTheme": "dark",
         "locale": "en",
     }
     if symbol:
         config["symbol"] = symbol
 
-    tradingview_widget(
-        "https://s3.tradingview.com/external-embedding/embed-widget-timeline.js",
-        config,
-        height=height,
-        container_class="mm-live-news",
-    )
+    config_json = json.dumps(config)
+    widget_html = f"""
+    <div class="tradingview-widget-container">
+      <div class="tradingview-widget-container__widget"></div>
+      <script
+        type="text/javascript"
+        src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js"
+        async>
+        {config_json}
+      </script>
+    </div>
+    """
+    tradingview_isolated_html(widget_html, height=height, scrolling=False)
 
 
 def live_market_overview(height=520, forex_only=False):
@@ -1870,7 +1930,7 @@ def top_ticker():
         <small>Prices and daily changes update automatically • provider timing may vary</small>
     </div>
     """)
-    live_ticker_tape(height=78)
+    live_ticker_tape(height=82)
 
 
 def tool_card(icon, title, text, link):
