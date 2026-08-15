@@ -1905,12 +1905,14 @@ with st.sidebar:
 
         if st.button("Open Live Insights", key="sidebar_open_member_engine", type="primary", use_container_width=True):
             st.session_state["_mm_active_page"] = "Member Live Insight Engine"
+            st.session_state["_mm_nav_user_selected_page"] = None
             st.session_state["_mm_force_member_page"] = True
             st.rerun()
 
         if st.button("Sign Out", key="sidebar_member_logout", use_container_width=True):
             supabase_logout()
             st.session_state["_mm_active_page"] = "Home"
+            st.session_state["_mm_nav_user_selected_page"] = None
             st.rerun()
 
     elif member_access["mode"] == "login":
@@ -1933,6 +1935,7 @@ with st.sidebar:
             ok, message = supabase_login(login_email, login_password)
             if ok:
                 st.session_state["_mm_active_page"] = "Member Live Insight Engine"
+                st.session_state["_mm_nav_user_selected_page"] = None
                 st.session_state["_mm_force_member_page"] = True
                 st.rerun()
             else:
@@ -1972,27 +1975,40 @@ with st.sidebar:
         if st.button("Sign Out", key="sidebar_denied_logout", use_container_width=True):
             supabase_logout()
             st.session_state["_mm_active_page"] = "Home"
+            st.session_state["_mm_nav_user_selected_page"] = None
             st.rerun()
 
     # ---------------------------------------------------------
-    # Persistent navigation
+    # Persistent navigation — V7.7.8
     # ---------------------------------------------------------
-    # The current page is stored separately from the sidebar radio widgets.
-    # Every radio group starts with no selected circle. A selection appears only
-    # after the user clicks an item, and choosing a new item clears selections
-    # from the other sidebar groups.
+    # Streamlit reruns the complete script whenever the member changes Asset,
+    # Trading Style, Session Context, Manual Override, etc.
+    #
+    # Earlier builds kept one session_state key per radio group. A stale
+    # selection such as "Ask a Question" could survive a programmatic member
+    # redirect and later reclaim the page during a widget rerun.
+    #
+    # V7.7.8 separates:
+    #   1) the page currently being displayed; and
+    #   2) the sidebar item the USER explicitly clicked.
+    #
+    # A navigation epoch gives every radio group a fresh widget key after a
+    # navigation click. That means only the user's latest clicked item appears
+    # selected, while automatic routing to Live Insights has no stale radio
+    # state capable of taking control on the next rerun.
+
     if "_mm_active_page" not in st.session_state:
         st.session_state["_mm_active_page"] = "Home"
 
-    NAV_WIDGET_KEYS = [
-        "nav_main",
-        "nav_learn",
-        "nav_briefs",
-        "nav_tools",
-        "nav_members",
-        "nav_admin",
-        "nav_contact",
-    ]
+    if "_mm_nav_user_selected_page" not in st.session_state:
+        st.session_state["_mm_nav_user_selected_page"] = None
+
+    if "_mm_nav_epoch" not in st.session_state:
+        st.session_state["_mm_nav_epoch"] = 0
+
+    def _nav_index(options):
+        selected_page = st.session_state.get("_mm_nav_user_selected_page")
+        return options.index(selected_page) if selected_page in options else None
 
     def _set_nav_page(widget_key):
         selected = st.session_state.get(widget_key)
@@ -2000,101 +2016,114 @@ with st.sidebar:
             return
 
         st.session_state["_mm_active_page"] = selected
+        st.session_state["_mm_nav_user_selected_page"] = selected
         st.session_state["_mm_member_auto_entry_done"] = True
 
-        # Only the item the user just clicked should display as selected.
-        for other_key in NAV_WIDGET_KEYS:
-            if other_key != widget_key:
-                st.session_state[other_key] = None
+        # Rebuild every navigation radio with a fresh widget key on the next run.
+        # The selected circle is reconstructed only for the clicked page.
+        st.session_state["_mm_nav_epoch"] += 1
 
-    st.markdown('<div class="nav-section">MAIN</div>', unsafe_allow_html=True)
-    st.radio(
-        "Main",
-        ["Home", "About Margin Manor", "Free Market Tools / Insights"],
-        index=None,
-        key="nav_main",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_main",),
-    )
-
-    st.markdown('<div class="nav-section">LEARN</div>', unsafe_allow_html=True)
-    st.radio(
-        "Learn",
-        ["Beginner Investing", "Stocks", "ETFs", "REITs", "Bonds", "Risk Management"],
-        index=None,
-        key="nav_learn",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_learn",),
-    )
-
-    st.markdown('<div class="nav-section">MARKET BRIEFS</div>', unsafe_allow_html=True)
-    st.radio(
-        "Briefs",
-        ["Market Briefs"],
-        index=None,
-        key="nav_briefs",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_briefs",),
-    )
-
-    st.markdown('<div class="nav-section">TOOLS</div>', unsafe_allow_html=True)
-    st.radio(
-        "Tools",
-        ["Margin Manor Terminal", "Strategy Library", "Economic Calendar", "Gold / FX Dashboard"],
-        index=None,
-        key="nav_tools",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_tools",),
-    )
-
-    st.markdown('<div class="nav-section">MEMBERS</div>', unsafe_allow_html=True)
-    st.radio(
-        "Members",
-        ["Member Live Insight Engine"],
-        index=None,
-        key="nav_members",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_members",),
-    )
-
-    if admin_access["allowed"]:
-        st.markdown('<div class="nav-section">ADMIN</div>', unsafe_allow_html=True)
-        st.radio(
-            "Admin",
-            ["Questions Inbox"],
-            index=None,
-            key="nav_admin",
-            label_visibility="collapsed",
-            on_change=_set_nav_page,
-            args=("nav_admin",),
-        )
-
-    st.markdown('<div class="nav-section">CONTACT</div>', unsafe_allow_html=True)
-    st.radio(
-        "Contact",
-        ["Ask a Question"],
-        index=None,
-        key="nav_contact",
-        label_visibility="collapsed",
-        on_change=_set_nav_page,
-        args=("nav_contact",),
-    )
-
-    # Direct member entry after a successful login, and direct routing from the
-    # "Open Live Insights" button. Programmatic routing does not pre-select a
-    # sidebar radio; the selection circle remains a record of an actual click.
+    # Programmatic member routing has priority and intentionally clears any
+    # previous sidebar click. This is what prevents a stale Ask-a-Question
+    # selection from hijacking later Live Insight widget reruns.
     if member_access["allowed"]:
         if st.session_state.pop("_mm_force_member_page", False):
             st.session_state["_mm_active_page"] = "Member Live Insight Engine"
+            st.session_state["_mm_nav_user_selected_page"] = None
+            st.session_state["_mm_nav_epoch"] += 1
             st.session_state["_mm_member_auto_entry_done"] = True
         elif not st.session_state.get("_mm_member_auto_entry_done", False):
             st.session_state["_mm_active_page"] = "Member Live Insight Engine"
+            st.session_state["_mm_nav_user_selected_page"] = None
+            st.session_state["_mm_nav_epoch"] += 1
             st.session_state["_mm_member_auto_entry_done"] = True
+
+    nav_epoch = st.session_state["_mm_nav_epoch"]
+
+    main_options = ["Home", "About Margin Manor", "Free Market Tools / Insights"]
+    st.markdown('<div class="nav-section">MAIN</div>', unsafe_allow_html=True)
+    st.radio(
+        "Main",
+        main_options,
+        index=_nav_index(main_options),
+        key=f"nav_main_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_main_{nav_epoch}",),
+    )
+
+    learn_options = ["Beginner Investing", "Stocks", "ETFs", "REITs", "Bonds", "Risk Management"]
+    st.markdown('<div class="nav-section">LEARN</div>', unsafe_allow_html=True)
+    st.radio(
+        "Learn",
+        learn_options,
+        index=_nav_index(learn_options),
+        key=f"nav_learn_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_learn_{nav_epoch}",),
+    )
+
+    brief_options = ["Market Briefs"]
+    st.markdown('<div class="nav-section">MARKET BRIEFS</div>', unsafe_allow_html=True)
+    st.radio(
+        "Briefs",
+        brief_options,
+        index=_nav_index(brief_options),
+        key=f"nav_briefs_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_briefs_{nav_epoch}",),
+    )
+
+    tool_options = ["Margin Manor Terminal", "Strategy Library", "Economic Calendar", "Gold / FX Dashboard"]
+    st.markdown('<div class="nav-section">TOOLS</div>', unsafe_allow_html=True)
+    st.radio(
+        "Tools",
+        tool_options,
+        index=_nav_index(tool_options),
+        key=f"nav_tools_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_tools_{nav_epoch}",),
+    )
+
+    member_options = ["Member Live Insight Engine"]
+    st.markdown('<div class="nav-section">MEMBERS</div>', unsafe_allow_html=True)
+    st.radio(
+        "Members",
+        member_options,
+        index=_nav_index(member_options),
+        key=f"nav_members_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_members_{nav_epoch}",),
+    )
+
+    if admin_access["allowed"]:
+        admin_options = ["Questions Inbox"]
+        st.markdown('<div class="nav-section">ADMIN</div>', unsafe_allow_html=True)
+        st.radio(
+            "Admin",
+            admin_options,
+            index=_nav_index(admin_options),
+            key=f"nav_admin_{nav_epoch}",
+            label_visibility="collapsed",
+            on_change=_set_nav_page,
+            args=(f"nav_admin_{nav_epoch}",),
+        )
+
+    contact_options = ["Ask a Question"]
+    st.markdown('<div class="nav-section">CONTACT</div>', unsafe_allow_html=True)
+    st.radio(
+        "Contact",
+        contact_options,
+        index=_nav_index(contact_options),
+        key=f"nav_contact_{nav_epoch}",
+        label_visibility="collapsed",
+        on_change=_set_nav_page,
+        args=(f"nav_contact_{nav_epoch}",),
+    )
 
     page = st.session_state["_mm_active_page"]
 
