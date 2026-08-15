@@ -1,5 +1,6 @@
 import streamlit as st
 import json
+from urllib.parse import quote
 import re
 from pathlib import Path
 from datetime import date
@@ -2613,9 +2614,14 @@ elif page == "Questions Inbox":
 
                         with status_cols[2]:
                             if email:
+                                gmail_url = (
+                                    "https://mail.google.com/mail/?view=cm&fs=1"
+                                    f"&to={quote(email, safe='')}"
+                                    f"&su={quote(f'Margin Manor Question {token}', safe='')}"
+                                )
                                 st.link_button(
-                                    "Open Email",
-                                    f"mailto:{email}?subject=Margin%20Manor%20Question%20{token}",
+                                    "Open Gmail Reply",
+                                    gmail_url,
                                     use_container_width=True,
                                 )
 
