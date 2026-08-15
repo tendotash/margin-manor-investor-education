@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from datetime import date
 from textwrap import dedent
+import re
 
 st.set_page_config(
     page_title="Margin Manor | Investor Education",
