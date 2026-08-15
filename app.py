@@ -1970,25 +1970,40 @@ with st.sidebar:
     # ---------------------------------------------------------
     # Persistent navigation
     # ---------------------------------------------------------
-    # Streamlit reruns the whole script whenever a selectbox, toggle or button
-    # changes. The previous V7.2 navigation rebuilt the page from the sidebar
-    # radio defaults on every rerun, which caused Member Live Insights to jump
-    # back to the public homepage. `_mm_active_page` is now the single source
-    # of truth and survives all normal widget reruns.
+    # The current page is stored separately from the sidebar radio widgets.
+    # Every radio group starts with no selected circle. A selection appears only
+    # after the user clicks an item, and choosing a new item clears selections
+    # from the other sidebar groups.
     if "_mm_active_page" not in st.session_state:
         st.session_state["_mm_active_page"] = "Home"
 
+    NAV_WIDGET_KEYS = [
+        "nav_main",
+        "nav_learn",
+        "nav_briefs",
+        "nav_tools",
+        "nav_members",
+        "nav_contact",
+    ]
+
     def _set_nav_page(widget_key):
         selected = st.session_state.get(widget_key)
-        if selected:
-            st.session_state["_mm_active_page"] = selected
-            # A logged-in member has now made an explicit navigation choice.
-            st.session_state["_mm_member_auto_entry_done"] = True
+        if not selected:
+            return
+
+        st.session_state["_mm_active_page"] = selected
+        st.session_state["_mm_member_auto_entry_done"] = True
+
+        # Only the item the user just clicked should display as selected.
+        for other_key in NAV_WIDGET_KEYS:
+            if other_key != widget_key:
+                st.session_state[other_key] = None
 
     st.markdown('<div class="nav-section">MAIN</div>', unsafe_allow_html=True)
     st.radio(
         "Main",
         ["Home", "About Margin Manor", "Free Market Tools / Insights"],
+        index=None,
         key="nav_main",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -1999,6 +2014,7 @@ with st.sidebar:
     st.radio(
         "Learn",
         ["Beginner Investing", "Stocks", "ETFs", "REITs", "Bonds", "Risk Management"],
+        index=None,
         key="nav_learn",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2009,6 +2025,7 @@ with st.sidebar:
     st.radio(
         "Briefs",
         ["Market Briefs"],
+        index=None,
         key="nav_briefs",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2019,6 +2036,7 @@ with st.sidebar:
     st.radio(
         "Tools",
         ["Margin Manor Terminal", "Strategy Library", "Economic Calendar", "Gold / FX Dashboard"],
+        index=None,
         key="nav_tools",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2029,6 +2047,7 @@ with st.sidebar:
     st.radio(
         "Members",
         ["Member Live Insight Engine"],
+        index=None,
         key="nav_members",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2039,6 +2058,7 @@ with st.sidebar:
     st.radio(
         "Contact",
         ["Ask a Question"],
+        index=None,
         key="nav_contact",
         label_visibility="collapsed",
         on_change=_set_nav_page,
@@ -2046,8 +2066,8 @@ with st.sidebar:
     )
 
     # Direct member entry after a successful login, and direct routing from the
-    # "Open Live Insights" button. Crucially, we save the destination into the
-    # persistent page state so every subsequent analysis-widget rerun stays here.
+    # "Open Live Insights" button. Programmatic routing does not pre-select a
+    # sidebar radio; the selection circle remains a record of an actual click.
     if member_access["allowed"]:
         if st.session_state.pop("_mm_force_member_page", False):
             st.session_state["_mm_active_page"] = "Member Live Insight Engine"
