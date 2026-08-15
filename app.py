@@ -146,28 +146,50 @@ def live_economic_calendar(height=360, compact=False):
 
 
 def live_ticker_tape(height=82):
-    """Live multi-asset prices using TradingView's current Ticker Tape web component."""
-    symbols = ",".join([
-        "OANDA:XAUUSD",
-        "TVC:DXY",
-        "FOREXCOM:SPXUSD",
-        "TVC:US10Y",
-        "BITSTAMP:BTCUSD",
-        "FX:EURUSD",
-        "FX:USDJPY",
-    ])
+    """
+    Live multi-asset ticker using TradingView's iframe-based Ticker Tape embed.
+
+    The newer Web Component can remain stuck in its loading skeleton inside
+    Streamlit's nested component iframe on some hosted deployments. The
+    iframe-style TradingView ticker uses the same market-data widget but is
+    materially more reliable in this environment.
+    """
+    config = {
+        "symbols": [
+            {"description": "Gold", "proName": "OANDA:XAUUSD"},
+            {"description": "DXY", "proName": "TVC:DXY"},
+            {"description": "S&P 500", "proName": "FOREXCOM:SPXUSD"},
+            {"description": "US 10Y", "proName": "TVC:US10Y"},
+            {"description": "Bitcoin", "proName": "BITSTAMP:BTCUSD"},
+            {"description": "EUR/USD", "proName": "FX:EURUSD"},
+            {"description": "USD/JPY", "proName": "FX:USDJPY"},
+        ],
+        "showSymbolLogo": True,
+        "isTransparent": True,
+        "displayMode": "compact",
+        "colorTheme": "dark",
+        "locale": "en",
+    }
+
+    config_json = json.dumps(config)
 
     widget_html = f"""
-    <script type="module"
-            src="https://widgets.tradingview-widget.com/w/en/tv-ticker-tape.js"></script>
-    <tv-ticker-tape
-        symbols="{symbols}"
-        theme="dark"
-        transparent-background
-        style="display:block;width:100%;height:100%;">
-    </tv-ticker-tape>
+    <div class="tradingview-widget-container" style="height:100%;width:100%;">
+      <div class="tradingview-widget-container__widget" style="height:100%;width:100%;"></div>
+      <script
+        type="text/javascript"
+        src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
+        async>
+        {config_json}
+      </script>
+    </div>
     """
-    tradingview_isolated_html(widget_html, height=height, scrolling=False)
+
+    tradingview_isolated_html(
+        widget_html,
+        height=height,
+        scrolling=False,
+    )
 
 
 def live_top_stories(height=430, symbol=None):
