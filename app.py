@@ -10,6 +10,7 @@ from premium_engine import (
     supabase_login,
     supabase_logout,
     send_password_reset,
+    fred_series,
 )
 
 st.set_page_config(
@@ -147,19 +148,21 @@ def live_economic_calendar(height=360, compact=False):
 
 def live_ticker_tape(height=82):
     """
-    Live multi-asset ticker using TradingView's iframe-based Ticker Tape embed.
+    Hybrid top tape:
+    - TradingView remains the live scrolling ticker for the working market symbols.
+    - US 10Y is rendered as a matched fixed tile from the official DGS10 series.
 
-    The newer Web Component can remain stuck in its loading skeleton inside
-    Streamlit's nested component iframe on some hosted deployments. The
-    iframe-style TradingView ticker uses the same market-data widget but is
-    materially more reliable in this environment.
+    Why hybrid?
+    TradingView's full chart supports TVC:US10Y/TVC:TNX, but the Legacy Ticker
+    Tape repeatedly rejects the bond-yield feed on the hosted app. Using another
+    price proxy would mislabel the instrument, so Margin Manor uses the official
+    10Y yield instead of displaying an incorrect bond-price substitute.
     """
     config = {
         "symbols": [
             {"description": "Gold", "proName": "OANDA:XAUUSD"},
             {"description": "DXY", "proName": "CAPITALCOM:DXY"},
             {"description": "S&P 500", "proName": "FOREXCOM:SPXUSD"},
-            {"description": "US 10Y", "proName": "TVC:TNX"},
             {"description": "Bitcoin", "proName": "BITSTAMP:BTCUSD"},
             {"description": "EUR/USD", "proName": "FX:EURUSD"},
             {"description": "USD/JPY", "proName": "FX:USDJPY"},
@@ -171,17 +174,137 @@ def live_ticker_tape(height=82):
         "locale": "en",
     }
 
+    # Official US 10Y yield. fred_series() uses:
+    # FRED API (if configured) -> FRED CSV -> U.S. Treasury fallback.
+    us10y = fred_series("DGS10")
+
+    if us10y is not None and not us10y.empty:
+        s = us10y.dropna()
+        latest_yield = float(s.iloc[-1])
+        previous_yield = float(s.iloc[-2]) if len(s) >= 2 else latest_yield
+        delta_bp = (latest_yield - previous_yield) * 100.0
+        latest_date = str(s.index[-1].date())
+
+        yield_text = f"{latest_yield:.3f}%"
+        bp_text = f"{delta_bp:+.1f} bp"
+        bp_color = "#23d18b" if delta_bp < 0 else "#ff5c68" if delta_bp > 0 else "#8fa0b7"
+        rate_status = f"Official · {latest_date}"
+    else:
+        yield_text = "—"
+        bp_text = "Unavailable"
+        bp_color = "#8fa0b7"
+        rate_status = "Official yield feed unavailable"
+
     config_json = json.dumps(config)
 
     widget_html = f"""
-    <div class="tradingview-widget-container" style="height:100%;width:100%;">
-      <div class="tradingview-widget-container__widget" style="height:100%;width:100%;"></div>
-      <script
-        type="text/javascript"
-        src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
-        async>
-        {config_json}
-      </script>
+    <style>
+      html, body {{
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: transparent;
+      }}
+
+      * {{ box-sizing: border-box; }}
+
+      .mm-tape-shell {{
+        display: flex;
+        align-items: stretch;
+        width: 100%;
+        height: {height}px;
+        overflow: hidden;
+        background: transparent;
+      }}
+
+      .mm-tv-tape {{
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+      }}
+
+      .mm-tv-tape .tradingview-widget-container,
+      .mm-tv-tape .tradingview-widget-container__widget {{
+        width: 100% !important;
+        height: 100% !important;
+      }}
+
+      .mm-us10y {{
+        flex: 0 0 156px;
+        height: 100%;
+        border-left: 1px solid rgba(110,125,145,.30);
+        background: rgba(5,11,18,.94);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 7px 13px;
+        font-family: Arial, sans-serif;
+        white-space: nowrap;
+      }}
+
+      .mm-us10y-title {{
+        color: #dce5ef;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.15;
+        margin-bottom: 4px;
+      }}
+
+      .mm-us10y-value {{
+        color: #f5f1e8;
+        font-size: 14px;
+        font-weight: 750;
+        line-height: 1.2;
+      }}
+
+      .mm-us10y-change {{
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.3;
+        color: {bp_color};
+      }}
+
+      .mm-us10y-source {{
+        color: #6f8298;
+        font-size: 7px;
+        line-height: 1.2;
+        margin-top: 2px;
+      }}
+
+      @media (max-width: 800px) {{
+        .mm-us10y {{
+          flex-basis: 132px;
+          padding-left: 9px;
+          padding-right: 9px;
+        }}
+        .mm-us10y-source {{
+          display: none;
+        }}
+      }}
+    </style>
+
+    <div class="mm-tape-shell">
+      <div class="mm-tv-tape">
+        <div class="tradingview-widget-container" style="height:100%;width:100%;">
+          <div class="tradingview-widget-container__widget" style="height:100%;width:100%;"></div>
+          <script
+            type="text/javascript"
+            src="https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js"
+            async>
+            {config_json}
+          </script>
+        </div>
+      </div>
+
+      <div class="mm-us10y" title="{rate_status}">
+        <div class="mm-us10y-title">US 10Y</div>
+        <div class="mm-us10y-value">{yield_text}</div>
+        <div class="mm-us10y-change">{bp_text}</div>
+        <div class="mm-us10y-source">{rate_status}</div>
+      </div>
     </div>
     """
 
