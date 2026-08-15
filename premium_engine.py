@@ -419,6 +419,242 @@ def render_access_gate():
     return None
 
 
+
+# ============================================================
+# V7.7.7 — QUESTIONS + ADMIN INBOX
+# ============================================================
+
+def admin_state():
+    """Return admin access for the currently authenticated Supabase user."""
+    sb, user = _restore_supabase_session()
+    if not sb or not user:
+        return {
+            "allowed": False,
+            "mode": "login_required",
+            "email": "",
+            "name": "",
+        }
+
+    try:
+        response = (
+            sb.table("admins")
+            .select("user_id,email,display_name")
+            .eq("user_id", str(user.id))
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(response, "data", None) or []
+    except Exception:
+        return {
+            "allowed": False,
+            "mode": "setup_required",
+            "email": str(user.email or "").strip().lower(),
+            "name": st.session_state.get("mm_sb_name", "Member"),
+        }
+
+    if not rows:
+        return {
+            "allowed": False,
+            "mode": "not_admin",
+            "email": str(user.email or "").strip().lower(),
+            "name": st.session_state.get("mm_sb_name", "Member"),
+        }
+
+    row = rows[0]
+    return {
+        "allowed": True,
+        "mode": "admin",
+        "email": str(row.get("email") or user.email or "").strip().lower(),
+        "name": str(
+            row.get("display_name")
+            or st.session_state.get("mm_sb_name")
+            or user.email
+            or "Admin"
+        ),
+        "user_id": str(user.id),
+    }
+
+
+def submit_public_question(name, email, experience, question):
+    """
+    Public form submission through a SECURITY DEFINER Postgres RPC.
+    The browser/app never receives direct SELECT access to the questions table.
+    """
+    name = str(name or "").strip()
+    email = str(email or "").strip().lower()
+    experience = str(experience or "").strip()
+    question = str(question or "").strip()
+
+    if not name or not email or not question:
+        return False, "Please fill in your name, email and question.", None
+
+    try:
+        sb = _new_supabase_client()
+        response = (
+            sb.rpc(
+                "submit_public_question",
+                {
+                    "p_name": name,
+                    "p_email": email,
+                    "p_experience": experience,
+                    "p_question": question,
+                },
+            )
+            .execute()
+        )
+
+        ticket = getattr(response, "data", None)
+
+        if isinstance(ticket, list):
+            ticket = ticket[0] if ticket else None
+            if isinstance(ticket, dict):
+                ticket = (
+                    ticket.get("submit_public_question")
+                    or ticket.get("ticket")
+                    or next(iter(ticket.values()), None)
+                )
+        elif isinstance(ticket, dict):
+            ticket = (
+                ticket.get("submit_public_question")
+                or ticket.get("ticket")
+                or next(iter(ticket.values()), None)
+            )
+
+        ticket = str(ticket or "").strip()
+
+        if not ticket:
+            return False, "Your question could not be saved. Please try again.", None
+
+        return True, "Question submitted successfully.", ticket
+
+    except Exception as exc:
+        message = str(exc)
+        if "invalid email" in message.lower():
+            return False, "Please enter a valid email address.", None
+        if "question must" in message.lower():
+            return False, message, None
+        return False, f"Could not submit your question: {message}", None
+
+
+def lookup_question_reply(ticket, email):
+    """
+    Public answer lookup through a restricted SECURITY DEFINER RPC.
+    Both the high-entropy ticket and matching email are required.
+    """
+    ticket = str(ticket or "").strip().upper()
+    email = str(email or "").strip().lower()
+
+    if not ticket or not email:
+        return False, "Enter both your question reference and email.", None
+
+    try:
+        sb = _new_supabase_client()
+        response = (
+            sb.rpc(
+                "lookup_question_reply",
+                {
+                    "p_ticket": ticket,
+                    "p_email": email,
+                },
+            )
+            .execute()
+        )
+        rows = getattr(response, "data", None) or []
+
+        if isinstance(rows, dict):
+            rows = [rows]
+
+        if not rows:
+            return False, "No question was found for that reference and email.", None
+
+        return True, "Question found.", rows[0]
+
+    except Exception as exc:
+        return False, f"Could not check the question right now: {exc}", None
+
+
+def list_admin_questions(status=None, limit=200):
+    """Admin-only inbox query. RLS blocks non-admin authenticated users."""
+    sb, user = _restore_supabase_session()
+    if not sb or not user:
+        return False, "Admin login required.", []
+
+    try:
+        query = (
+            sb.table("questions")
+            .select(
+                "id,public_token,name,email,experience,question_text,status,"
+                "answer,created_at,updated_at,answered_at,answered_by"
+            )
+            .order("created_at", desc=True)
+            .limit(int(limit))
+        )
+
+        if status and status != "All":
+            query = query.eq("status", str(status).lower())
+
+        response = query.execute()
+        rows = getattr(response, "data", None) or []
+        return True, "Questions loaded.", rows
+
+    except Exception as exc:
+        return False, f"Could not load the admin inbox: {exc}", []
+
+
+def save_question_answer(question_id, answer):
+    """Save/edit an answer and make it immediately available via public lookup."""
+    answer = str(answer or "").strip()
+    if not answer:
+        return False, "Write an answer before saving."
+
+    sb, user = _restore_supabase_session()
+    if not sb or not user:
+        return False, "Admin login required."
+
+    try:
+        payload = {
+            "answer": answer,
+            "status": "answered",
+            "answered_at": datetime.now(timezone.utc).isoformat(),
+            "answered_by": str(user.id),
+        }
+        (
+            sb.table("questions")
+            .update(payload)
+            .eq("id", str(question_id))
+            .execute()
+        )
+        return True, "Answer saved. The user can now view it with their question reference."
+
+    except Exception as exc:
+        return False, f"Could not save the answer: {exc}"
+
+
+def set_question_status(question_id, status):
+    """Admin-only workflow status update."""
+    allowed = {"new", "read", "answered", "archived"}
+    status = str(status or "").strip().lower()
+
+    if status not in allowed:
+        return False, "Invalid question status."
+
+    sb, user = _restore_supabase_session()
+    if not sb or not user:
+        return False, "Admin login required."
+
+    try:
+        payload = {"status": status}
+        (
+            sb.table("questions")
+            .update(payload)
+            .eq("id", str(question_id))
+            .execute()
+        )
+        return True, f"Question marked {status}."
+    except Exception as exc:
+        return False, f"Could not update the question: {exc}"
+
+
 def normalize_symbol(raw):
     s = (raw or "").upper().strip()
     s = re.sub(r"[^A-Z0-9]", "", s)
