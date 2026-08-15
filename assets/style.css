@@ -1334,3 +1334,62 @@ div[data-testid="stButton"] button[kind="primary"] {
     color: var(--text) !important;
     font-size: 12px !important;
 }
+
+
+/* =========================================================
+   V7.7.2 — LIVE MARKET BRIEF CONTAINER FIX
+   Keep the TradingView content physically inside the visible panel border.
+   ========================================================= */
+
+/* Style only the two bordered Streamlit containers that contain our anchors. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor),
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) {
+    border: 1px solid var(--line) !important;
+    border-radius: 7px !important;
+    background: rgba(7,19,33,0.42) !important;
+    overflow: hidden !important;
+}
+
+/* Remove Streamlit's internal padding so the heading and widget share one edge. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor) > div,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) > div {
+    padding: 0 !important;
+    gap: 0 !important;
+}
+
+/* The outer Streamlit container now owns the border. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor) .live-panel-heading,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) .live-events-heading {
+    border: 0 !important;
+    border-bottom: 1px solid var(--line) !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+/* Eliminate the extra Streamlit element spacing between heading and widget. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor) [data-testid="stElementContainer"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) [data-testid="stElementContainer"] {
+    margin: 0 !important;
+}
+
+/* TradingView iframe should exactly fill the panel width with no outside spill. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-panel-anchor) iframe,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) iframe {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: 0 !important;
+    margin: 0 !important;
+}
+
+/* Calendar's old inner border is no longer required inside the outer shell. */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.mm-live-events-anchor) .mm-live-calendar {
+    border: 0 !important;
+    border-radius: 0 !important;
+}
+
+/* Hide the marker elements themselves. */
+.mm-live-panel-anchor,
+.mm-live-events-anchor {
+    display: none !important;
+}
