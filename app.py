@@ -157,9 +157,9 @@ def live_ticker_tape(height=82):
     config = {
         "symbols": [
             {"description": "Gold", "proName": "OANDA:XAUUSD"},
-            {"description": "DXY", "proName": "TVC:DXY"},
+            {"description": "DXY", "proName": "CAPITALCOM:DXY"},
             {"description": "S&P 500", "proName": "FOREXCOM:SPXUSD"},
-            {"description": "US 10Y", "proName": "TVC:US10Y"},
+            {"description": "US 10Y", "proName": "CBOE:TNX.P"},
             {"description": "Bitcoin", "proName": "BITSTAMP:BTCUSD"},
             {"description": "EUR/USD", "proName": "FX:EURUSD"},
             {"description": "USD/JPY", "proName": "FX:USDJPY"},
@@ -2017,22 +2017,26 @@ def home():
     brief_col, events_col = st.columns([3.2, 1.25], gap="medium")
 
     with brief_col:
-        render_html("""
-        <div class="live-panel-heading">
-            <div class="events-title">LATEST MARKET STORIES</div>
-            <div class="live-events-sub">Live • automatically updated</div>
-        </div>
-        """)
-        live_top_stories(height=330)
+        with st.container(border=True):
+            render_html("""
+            <div class="mm-live-panel-anchor"></div>
+            <div class="live-panel-heading">
+                <div class="events-title">LATEST MARKET STORIES</div>
+                <div class="live-events-sub">Live • automatically updated</div>
+            </div>
+            """)
+            live_top_stories(height=330)
 
     with events_col:
-        render_html("""
-        <div class="live-events-heading">
-            <div class="events-title">UPCOMING EVENTS</div>
-            <div class="live-events-sub">Live • automatically updated</div>
-        </div>
-        """)
-        live_economic_calendar(height=330, compact=True)
+        with st.container(border=True):
+            render_html("""
+            <div class="mm-live-events-anchor"></div>
+            <div class="live-events-heading">
+                <div class="events-title">UPCOMING EVENTS</div>
+                <div class="live-events-sub">Live • automatically updated</div>
+            </div>
+            """)
+            live_economic_calendar(height=330, compact=True)
 
 def content_page(title, subtitle, body):
     top_ticker()
